@@ -25,7 +25,7 @@ app.get('/restaurants/:longitude/:latitude', async (req, res) => {
           radius: 1000,
           longitude: req.params.longitude,
           latitude: req.params.latitude,
-          // open_now: true,
+          open_now: true,
           term: 'restaurants',
           price: '1,2'
         },
