@@ -13,6 +13,9 @@ app.use((req, res, next) => {
   next()
 })
 
+app.get('/', (req, res) => {
+  res.send('Test')
+})
 app.get('/restaurants/:longitude/:latitude', async (req, res) => {
   try {
     const response = await axios.get(
