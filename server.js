@@ -1,10 +1,38 @@
 require('dotenv').config({
   path: __dirname + '../.env'
 })
+const Socket = require('socket.io')
 const express = require('express')
 const axios = require('axios')
 const cors = require('cors')
 const app = express()
+const server = require('http').createServer(app)
+const io = require('socket.io')(server, {
+  cors: {
+    origin: '*'
+  }
+})
+
+function getSocketRoom (socket) {
+  const socketRooms = Array.from(socket.rooms.values()).filter(
+    room => room !== socket.id
+  )
+  return socketRooms[0] || null
+}
+
+io.on('connection', socket => {
+  console.log('Connected ' + socket.id)
+  console.log(io.engine.clientsCount)
+  socket.on('join-room', async message => {
+    await socket.join(message.roomId)
+    socket.emit('room-joined')
+  })
+
+  socket.on('update-restaurant', async message => {
+    const room = getSocketRoom(socket)
+    socket.to(room).emit('on-restaurant-update', message)
+  })
+})
 
 app.use(express.json())
 app.use(cors())
@@ -16,6 +44,7 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   res.send('Test')
 })
+
 app.get('/restaurants/:longitude/:latitude', async (req, res) => {
   try {
     const response = await axios.get(
@@ -40,7 +69,6 @@ app.get('/restaurants/:longitude/:latitude', async (req, res) => {
   } catch (err) {
     res.status(500).send(err.response.data)
   }
-  // res.status(200).send(response.data)
 })
 
 app.get('/categories', async (req, res) => {
@@ -89,5 +117,4 @@ app.get('/images/:id', async (req, res) => {
 })
 
 const port = process.env.PORT || 3005
-
-app.listen(port, () => console.log('Server started at ' + port))
+server.listen(port, () => console.log('Server started at ' + port))
