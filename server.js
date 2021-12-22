@@ -12,6 +12,29 @@ const io = require('socket.io')(server, {
     origin: '*'
   }
 })
+const bannedCategories = [
+  'icecream',
+  'hotdogs',
+  'cafes',
+  'fondue',
+  'fastfood',
+  'coffee',
+  'tobaccoshops',
+  'convenience',
+  'grocery'
+]
+const rooms = {}
+
+function getRandomRestaurant (list) {
+  let randomIndex, randomPlace
+  let isBanned = true
+  while (isBanned) {
+    randomIndex = Math.floor(Math.random() * list.length)
+    randomPlace = list[randomIndex]
+    isBanned = bannedCategories.includes(randomPlace.categories[0].alias)
+  }
+  return randomPlace
+}
 
 function getSocketRoom (socket) {
   const socketRooms = Array.from(socket.rooms.values()).filter(
@@ -21,11 +44,34 @@ function getSocketRoom (socket) {
 }
 
 io.on('connection', socket => {
-  console.log('Connected ' + socket.id)
-  console.log(io.engine.clientsCount)
-  socket.on('join-room', async message => {
+  socket.on('join-group', async message => {
     await socket.join(message.roomId)
-    socket.emit('room-joined')
+    if (io.sockets.adapter.rooms.get(message.roomId)) {
+      if (!rooms[message.roomId]) {
+        rooms[message.roomId] = {}
+        rooms[message.roomId].room = io.sockets.adapter.rooms.get(
+          message.roomId
+        )
+      }
+      if (rooms[message.roomId].selectedRestaurant) {
+        socket.emit(
+          'group-joined',
+          message.roomId,
+          rooms[message.roomId].selectedRestaurant
+        )
+      } else {
+        socket.emit('no-random-place', message.roomId)
+      }
+    }
+  })
+
+  socket.on('random-place-received', async message => {
+    rooms[message.roomId].selectedRestaurant = message.randomRestaurant
+    socket.emit(
+      'group-joined',
+      message.roomId,
+      rooms[message.roomId].selectedRestaurant
+    )
   })
 
   socket.on('update-restaurant', async message => {
@@ -45,7 +91,7 @@ app.get('/', (req, res) => {
   res.send('Test')
 })
 
-app.get('/restaurants/:longitude/:latitude', async (req, res) => {
+app.get('/random-restaurant/:longitude/:latitude', async (req, res) => {
   try {
     const response = await axios.get(
       'https://api.yelp.com/v3/businesses/search',
@@ -65,7 +111,9 @@ app.get('/restaurants/:longitude/:latitude', async (req, res) => {
         }
       }
     )
-    res.status(200).json(response.data)
+    const restaurantsList = response.data.businesses
+    const restaurant = getRandomRestaurant(restaurantsList)
+    res.status(200).json(restaurant)
   } catch (err) {
     res.status(500).send(err.response.data)
   }
